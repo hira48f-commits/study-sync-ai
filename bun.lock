@@ -1,0 +1,194 @@
+// Web Audio API Synthesizer for UI Sound Effects and Ambient Focus Sounds
+
+class AudioSynth {
+  private ctx: AudioContext | null = null;
+  private ambientGain: GainNode | null = null;
+  private ambientOscillators: OscillatorNode[] = [];
+  private noiseNode: AudioNode | null = null;
+  private isAmbientPlaying = false;
+
+  private getContext(): AudioContext {
+    if (!this.ctx) {
+      const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      this.ctx = new AudioCtx();
+    }
+    if (this.ctx.state === "suspended") {
+      this.ctx.resume();
+    }
+    return this.ctx;
+  }
+
+  // Play pleasant success chord
+  playSuccess() {
+    try {
+      const ctx = this.getContext();
+      const now = ctx.currentTime;
+      const freqs = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+
+      freqs.forEach((freq, idx) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+
+        gain.gain.setValueAtTime(0, now + idx * 0.08);
+        gain.gain.linearRampToValueAtTime(0.12, now + idx * 0.08 + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.6);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now + idx * 0.08);
+        osc.stop(now + idx * 0.08 + 0.65);
+      });
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // Play gentle error/try-again tone
+  playError() {
+    try {
+      const ctx = this.getContext();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(300, now);
+      osc.frequency.exponentialRampToValueAtTime(180, now + 0.25);
+
+      gain.gain.setValueAtTime(0.15, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 0.3);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // Play Pomodoro completion gong
+  playGong() {
+    try {
+      const ctx = this.getContext();
+      const now = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(440, now); // A4
+      osc.frequency.exponentialRampToValueAtTime(220, now + 1.5);
+
+      gain.gain.setValueAtTime(0.3, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 2.0);
+
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(now);
+      osc.stop(now + 2.0);
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  // Toggle Ambient Focus Binaural Beats / Rain Simulator
+  startAmbient(type: "rain" | "binaural" | "cafe" = "binaural") {
+    try {
+      this.stopAmbient();
+      const ctx = this.getContext();
+      const now = ctx.currentTime;
+      this.ambientGain = ctx.createGain();
+      this.ambientGain.gain.setValueAtTime(0.08, now);
+
+      if (type === "binaural") {
+        // Binaural Alpha Waves (Base 200Hz + 10Hz Alpha difference = 210Hz)
+        const oscL = ctx.createOscillator();
+        const oscR = ctx.createOscillator();
+        const merger = ctx.createChannelMerger(2);
+
+        oscL.type = "sine";
+        oscL.frequency.setValueAtTime(200, now);
+
+        oscR.type = "sine";
+        oscR.frequency.setValueAtTime(210, now);
+
+        oscL.connect(merger, 0, 0); // left channel
+        oscR.connect(merger, 0, 1); // right channel
+
+        merger.connect(this.ambientGain);
+        this.ambientGain.connect(ctx.destination);
+
+        oscL.start(now);
+        oscR.start(now);
+        this.ambientOscillators = [oscL, oscR];
+      } else {
+        // White / Pink Noise for Rain
+        const bufferSize = ctx.sampleRate * 2;
+        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+        const data = buffer.getChannelData(0);
+        let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+
+        for (let i = 0; i < bufferSize; i++) {
+          const white = Math.random() * 2 - 1;
+          b0 = 0.99886 * b0 + white * 0.0555179;
+          b1 = 0.99332 * b1 + white * 0.0750759;
+          b2 = 0.96900 * b2 + white * 0.1538520;
+          b3 = 0.86650 * b3 + white * 0.3104856;
+          b4 = 0.55000 * b4 + white * 0.5329522;
+          b5 = -0.7616 * b5 - white * 0.0168980;
+          data[i] = b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362;
+          data[i] *= 0.04; // scale down
+          b6 = white * 0.115926;
+        }
+
+        const noise = ctx.createBufferSource();
+        noise.buffer = buffer;
+        noise.loop = true;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = "lowpass";
+        filter.frequency.setValueAtTime(800, now);
+
+        noise.connect(filter);
+        filter.connect(this.ambientGain);
+        this.ambientGain.connect(ctx.destination);
+
+        noise.start(now);
+        this.noiseNode = noise;
+      }
+
+      this.isAmbientPlaying = true;
+    } catch {
+      // Audio fallback
+    }
+  }
+
+  stopAmbient() {
+    if (this.ambientGain) {
+      try {
+        this.ambientGain.gain.exponentialRampToValueAtTime(0.0001, this.getContext().currentTime + 0.3);
+      } catch {}
+    }
+    this.ambientOscillators.forEach((osc) => {
+      try { osc.stop(); } catch {}
+    });
+    if (this.noiseNode) {
+      try { (this.noiseNode as AudioBufferSourceNode).stop(); } catch {}
+    }
+    this.ambientOscillators = [];
+    this.noiseNode = null;
+    this.ambientGain = null;
+    this.isAmbientPlaying = false;
+  }
+
+  getIsAmbientPlaying() {
+    return this.isAmbientPlaying;
+  }
+}
+
+export const audioSynth = new AudioSynth();

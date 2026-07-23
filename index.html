@@ -1,0 +1,88 @@
+import { StudyNote } from "../types";
+
+export function exportNoteAsText(note: StudyNote) {
+  const lines: string[] = [];
+  lines.push(`==================================================`);
+  lines.push(`STUDY NOTE: ${note.title.toUpperCase()}`);
+  lines.push(`Subject: ${note.subject}`);
+  lines.push(`Created: ${new Date(note.createdAt).toLocaleDateString()}`);
+  lines.push(`==================================================\n`);
+
+  lines.push(`1. EXECUTIVE SUMMARY`);
+  lines.push(`--------------------`);
+  lines.push(`Core Takeaway: ${note.materials.executiveSummary.mainIdea}\n`);
+  lines.push(`Overview:\n${note.materials.executiveSummary.overview}\n`);
+  lines.push(`Key Topics Covered: ${note.materials.executiveSummary.keyTopics.join(", ")}\n\n`);
+
+  lines.push(`2. KEY CONCEPTS & DEFINITIONS`);
+  lines.push(`------------------------------`);
+  note.materials.keyConcepts.forEach((kc, i) => {
+    lines.push(`[${i + 1}] ${kc.title} (${kc.difficulty.toUpperCase()})`);
+    lines.push(`Definition: ${kc.definition}`);
+    if (kc.example) lines.push(`Example: ${kc.example}`);
+    if (kc.formula) lines.push(`Formula: ${kc.formula}`);
+    lines.push(``);
+  });
+
+  lines.push(`3. BULLET NOTES BY CATEGORY`);
+  lines.push(`---------------------------`);
+  note.materials.bulletNotes.forEach((cat) => {
+    lines.push(`Category: ${cat.category}`);
+    cat.items.forEach((item) => lines.push(` • ${item}`));
+    lines.push(``);
+  });
+
+  lines.push(`4. REVISION PLAN`);
+  lines.push(`----------------`);
+  lines.push(`1-Day Active Recall: ${note.materials.revisionPlan.oneDay}`);
+  lines.push(`3-Day Reinforcement: ${note.materials.revisionPlan.threeDay}`);
+  lines.push(`7-Day Mastery Benchmark: ${note.materials.revisionPlan.sevenDay}`);
+  lines.push(`Exam Night Cheat-Sheet: ${note.materials.revisionPlan.examNightSummary}\n`);
+
+  lines.push(`5. FLASHCARDS (${note.materials.flashcards.length})`);
+  lines.push(`-----------------------`);
+  note.materials.flashcards.forEach((card, idx) => {
+    lines.push(`Q${idx + 1}: ${card.front || card.question}`);
+    lines.push(`A${idx + 1}: ${card.back || card.answer}\n`);
+  });
+
+  lines.push(`6. PRACTICE QUIZ (${note.materials.quizzes.length})`);
+  lines.push(`----------------------`);
+  note.materials.quizzes.forEach((q, idx) => {
+    lines.push(`Q${idx + 1}: ${q.question}`);
+    if (q.options) {
+      q.options.forEach((opt) => lines.push(`   - ${opt}`));
+    }
+    lines.push(`Correct Answer: ${q.correctAnswer}`);
+    lines.push(`Explanation: ${q.explanation}\n`);
+  });
+
+  const blob = new Blob([lines.join("\n")], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${note.title.replace(/[^a-z0-9]/gi, "_")}_StudyGuide.txt`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
+export function exportFlashcardsCSV(note: StudyNote) {
+  const rows = [["Front Question", "Back Answer", "Topic", "Difficulty"]];
+  note.materials.flashcards.forEach((card) => {
+    rows.push([
+      `"${(card.front || card.question || "").replace(/"/g, '""')}"`,
+      `"${(card.back || card.answer || "").replace(/"/g, '""')}"`,
+      `"${(card.topic || "").replace(/"/g, '""')}"`,
+      `"${card.difficulty}"`
+    ]);
+  });
+
+  const csvContent = rows.map((e) => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${note.title.replace(/[^a-z0-9]/gi, "_")}_Flashcards.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}

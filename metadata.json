@@ -1,0 +1,6 @@
+{
+  "name": "StudySync AI",
+  "description": "Intelligent study companion that transforms learning materials into summaries, notes, flashcards, practice quizzes, study plans, and concept maps.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
